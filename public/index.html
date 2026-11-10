@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Keya – Water Reminder</title>
+<style>
+:root{--bg:#f2f8fc;--card:#fff;--tx:#12263a;--mu:#5d7488;--ac:#1e88e5;--ok:#2e9e5b;--bd:#d6e4ef;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1a26;--card:#17283a;--tx:#e8f1f9;--mu:#93a9bc;--ac:#4aa3f0;--ok:#4cc57f;--bd:#27415a}}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--tx);font:16px system-ui,Segoe UI,Roboto,sans-serif;min-height:100%}
+main{max-width:480px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:14px}
+h1{font-size:22px;margin:4px 0 12px}h2{font-size:17px;margin:0 0 10px}
+input{width:100%;padding:11px;margin:5px 0 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:16px}
+button{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;width:100%}
+button.sec{background:transparent;color:var(--ac);border:1px solid var(--ac);margin-top:8px}
+.mu{color:var(--mu);font-size:14px}.hide{display:none}
+.bar{height:14px;background:var(--bd);border-radius:8px;overflow:hidden;margin:10px 0}.bar i{display:block;height:100%;background:var(--ac);width:0;transition:width .5s}
+.slot{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd)}
+.slot.done{color:var(--ok)}.slot.next{font-weight:700;color:var(--ac)}
+video{width:100%;border-radius:12px;background:#000;transform:scaleX(-1)}
+.row{display:flex;gap:8px}.err{color:#d33;font-size:14px;min-height:18px}
+</style></head><body><main>
+<div id="auth" class="card">
+ <h1>💧 Keya</h1>
+ <div class="row"><button id="tL">Sign in</button><button id="tS" class="sec" style="margin:0">New user</button></div>
+ <div id="sf" class="hide"><input id="sn" placeholder="Your name"><input id="sw" type="number" placeholder="Weight (kg)"><input id="sh" type="number" placeholder="Height (cm)"><input id="sa" type="number" placeholder="Age (years)"></div>
+ <input id="uid" placeholder="User ID" autocapitalize="none"><input id="pw" type="password" placeholder="Password">
+ <div class="err" id="err"></div><button id="go">Sign in</button>
+</div>
+<div id="app" class="hide">
+ <div class="card"><div style="display:flex;justify-content:space-between"><h1 id="hi" style="margin:0"></h1><button class="sec" id="out" style="width:auto;margin:0;padding:6px 12px">Log out</button></div>
+ <div class="mu" id="pf"></div>
+ <h2 style="margin-top:14px">Today: <span id="prog"></span></h2><div class="bar"><i id="fill"></i></div><div class="mu" id="goal"></div></div>
+ <div class="card"><h2>Today’s schedule</h2><div id="slots"></div>
+ <button id="drink" style="margin-top:12px">📷 I’m drinking water now</button>
+ <button class="sec" id="notif">🔔 Enable reminders</button></div>
+ <div class="card hide" id="cam"><h2>Drink in front of the camera</h2><video id="v" autoplay playsinline muted></video>
+ <div class="mu" id="cs">Starting camera…</div><div class="bar"><i id="cf"></i></div>
+ <button class="sec" id="man">Confirm manually</button><button class="sec" id="cc">Cancel</button></div>
+ <div class="card"><h2>Profile</h2><div class="row"><input id="pw2" type="number" placeholder="Weight kg"><input id="ph" type="number" placeholder="Height cm"><input id="pa" type="number" placeholder="Age"></div><button id="sv">Save profile &amp; recalculate</button></div>
+</div></main>
+<script>
+const $=id=>document.getElementById(id);
+let mode='in',U=null,users={},stream=null,tmr=null;
+let TOK='';const ld=()=>{};
+const api=async(p,m,b)=>{const r=await fetch('/api/'+p,{method:m||'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOK},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Server error');return j};
+const sv=()=>{try{localStorage.setItem('aq_tok',TOK);localStorage.setItem('aq_cur',U||'')}catch(e){}};
+const hash=async s=>{try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return btoa(s)}};
+const today=()=>new Date().toISOString().slice(0,10);
+function setMode(m){mode=m;$('sf').classList.toggle('hide',m=='in');$('go').textContent=m=='in'?'Sign in':'Create account';$('err').textContent=''}
+$('tL').onclick=()=>setMode('in');$('tS').onclick=()=>setMode('up');
+$('go').onclick=async()=>{
+ const id=$('uid').value.trim().toLowerCase(),p=$('pw').value;
+ if(!id||p.length<4)return $('err').textContent='Enter an ID and a password of 4+ characters.';
+ try{let r;
+  if(mode=='up'){const n=$('sn').value.trim(),w=+$('sw').value,ht=+$('sh').value,a=+$('sa').value;
+   if(!n||!(w>10&&w<300)||!(ht>50&&ht<260)||!(a>0&&a<120))return $('err').textContent='Please fill in valid name, weight, height and age.';
+   r=await api('register','POST',{id,password:p,name:n,w,ht,a})}
+  else r=await api('login','POST',{id,password:p});
+  TOK=r.token;U=id;users={};users[id]=r.user;sv();show()}catch(e){$('err').textContent=e.message}};
+$('out').onclick=()=>{U=null;TOK='';sv();stopCam();$('app').classList.add('hide');$('auth').classList.remove('hide')};
+// water goal: weight-based, adjusted by age; slightly more for taller people
+function calc(u){let f=u.a<30?40:u.a<=55?35:30;let ml=u.w*f+(u.ht>175?250:0);return Math.round(ml/50)*50}
+function slots(u){const g=calc(u),n=Math.ceil(g/250),s=[],st=7*60,en=21*60,gap=(en-st)/Math.max(n-1,1);
+ for(let i=0;i<n;i++){const m=Math.round(st+i*gap);s.push(String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'))}return s}
+function show(){
+ $('auth').classList.add('hide');$('app').classList.remove('hide');const u=users[U];
+ $('hi').textContent='Hi, '+u.name;$('pf').textContent=`${u.w} kg · ${u.ht} cm · ${u.a} yrs`;
+ $('pw2').value=u.w;$('ph').value=u.ht;$('pa').value=u.a;render()}
+function render(){
+ const u=users[U],g=calc(u),sl=slots(u),d=(u.logs[today()]||0);
+ $('goal').textContent=`Daily goal: ${(g/1000).toFixed(2)} L = ${sl.length} glasses × 250 ml`;
+ $('prog').textContent=`${Math.min(d,sl.length)}/${sl.length} glasses`;$('fill').style.width=Math.min(100,d/sl.length*100)+'%';
+ $('slots').innerHTML=sl.map((t,i)=>`<div class="slot ${i<d?'done':i==d?'next':''}"><span>${t} · 250 ml</span><span>${i<d?'✔ Done':i==d?'Next':'⏳'}</span></div>`).join('');
+ $('drink').disabled=d>=sl.length;$('drink').textContent=d>=sl.length?'🎉 Daily goal complete!':'📷 I’m drinking water now'}
+$('sv').onclick=()=>{const u=users[U];const w=+$('pw2').value,h=+$('ph').value,a=+$('pa').value;
+ if(w>10&&h>50&&a>0){u.w=w;u.ht=h;u.a=a;api('profile','PUT',{w,ht:h,a}).catch(()=>{});show()}};
+function complete(){const u=users[U];u.logs[today()]=(u.logs[today()]||0)+1;api('log','POST',{date:today(),count:u.logs[today()]}).catch(()=>{});stopCam();render();
+ const l=slots(u).length;if(u.logs[today()]>=l)alert('🎉 Great! You completed today’s water goal.')}
+function stopCam(){clearInterval(tmr);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('cam').classList.add('hide')}
+$('cc').onclick=stopCam;$('man').onclick=complete;
+// Camera check: watches for sustained hand/cup movement in view (simple motion detection)
+$('drink').onclick=async()=>{
+ $('cam').classList.remove('hide');$('cf').style.width='0';$('cs').textContent='Starting camera…';
+ try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});$('v').srcObject=stream}
+ catch(e){$('cs').textContent='Camera not available. Use “Confirm manually”.';return}
+ const c=document.createElement('canvas');c.width=32;c.height=24;const x=c.getContext('2d',{willReadFrequently:true});let prev=null,score=0;
+ $('cs').textContent='Raise your glass and drink. Detecting…';
+ tmr=setInterval(()=>{try{x.drawImage($('v'),0,0,32,24);const d=x.getImageData(0,0,32,24).data;
+  if(prev){let s=0;for(let i=0;i<d.length;i+=4)s+=Math.abs(d[i]-prev[i]);const m=s/(d.length/4);
+   if(m>6)score++;else score=Math.max(0,score-.5)}
+  prev=d;$('cf').style.width=Math.min(100,score/12*100)+'%';
+  if(score>=12){$('cs').textContent='Drinking detected ✔';complete()}}catch(e){}},250)};
+$('notif').onclick=async()=>{try{const r=await Notification.requestPermission();$('notif').textContent=r=='granted'?'🔔 Reminders on':'Reminders blocked'}catch(e){}};
+let lastN='';setInterval(()=>{if(!U)return;const u=users[U],sl=slots(u),d=u.logs[today()]||0,now=new Date(),t=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+ if(d<sl.length&&sl[d]<=t&&lastN!==t){lastN=t;try{if(Notification.permission=='granted')new Notification('💧 Time to drink water',{body:'Glass '+(d+1)+' of '+sl.length})}catch(e){}}},30000);
+(async()=>{try{TOK=localStorage.getItem('aq_tok')||'';const c=localStorage.getItem('aq_cur');if(TOK&&c){const r=await api('me');U=c;users={};users[c]=r.user;show()}}catch(e){TOK='';U=null}})();
+</script></body></html>
