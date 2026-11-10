@@ -21,13 +21,12 @@ video{width:100%;border-radius:12px;background:#000;transform:scaleX(-1)}
 </style></head><body><main>
 <div id="auth" class="card">
  <h1>💧 Keya</h1>
- <div class="row"><button id="tL">Sign in</button><button id="tS" class="sec" style="margin:0">New user</button></div>
- <div id="sf" class="hide"><input id="sn" placeholder="Your name"><input id="sw" type="number" placeholder="Weight (kg)"><input id="sh" type="number" placeholder="Height (cm)"><input id="sa" type="number" placeholder="Age (years)"></div>
- <input id="uid" placeholder="User ID" autocapitalize="none"><input id="pw" type="password" placeholder="Password">
- <div class="err" id="err"></div><button id="go">Sign in</button>
+ <p class="mu" style="margin-top:0">Enter your details to get your daily water plan.</p>
+ <div id="sf"><input id="sn" placeholder="Your name"><input id="sw" type="number" placeholder="Weight (kg)"><input id="sh" type="number" placeholder="Height (cm)"><input id="sa" type="number" placeholder="Age (years)"></div>
+ <div class="err" id="err"></div><button id="go">Start</button>
 </div>
 <div id="app" class="hide">
- <div class="card"><div style="display:flex;justify-content:space-between"><h1 id="hi" style="margin:0"></h1><button class="sec" id="out" style="width:auto;margin:0;padding:6px 12px">Log out</button></div>
+ <div class="card"><div style="display:flex;justify-content:space-between"><h1 id="hi" style="margin:0"></h1><button class="sec" id="out" style="width:auto;margin:0;padding:6px 12px">New person</button></div>
  <div class="mu" id="pf"></div>
  <h2 style="margin-top:14px">Today: <span id="prog"></span></h2><div class="bar"><i id="fill"></i></div><div class="mu" id="goal"></div></div>
  <div class="card"><h2>Today’s schedule</h2><div id="slots"></div>
@@ -46,16 +45,11 @@ const api=async(p,m,b)=>{const r=await fetch('/api/'+p,{method:m||'GET',headers:
 const sv=()=>{try{localStorage.setItem('aq_tok',TOK);localStorage.setItem('aq_cur',U||'')}catch(e){}};
 const hash=async s=>{try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return btoa(s)}};
 const today=()=>new Date().toISOString().slice(0,10);
-function setMode(m){mode=m;$('sf').classList.toggle('hide',m=='in');$('go').textContent=m=='in'?'Sign in':'Create account';$('err').textContent=''}
-$('tL').onclick=()=>setMode('in');$('tS').onclick=()=>setMode('up');
 $('go').onclick=async()=>{
- const id=$('uid').value.trim().toLowerCase(),p=$('pw').value;
- if(!id||p.length<4)return $('err').textContent='Enter an ID and a password of 4+ characters.';
- try{let r;
-  if(mode=='up'){const n=$('sn').value.trim(),w=+$('sw').value,ht=+$('sh').value,a=+$('sa').value;
-   if(!n||!(w>10&&w<300)||!(ht>50&&ht<260)||!(a>0&&a<120))return $('err').textContent='Please fill in valid name, weight, height and age.';
-   r=await api('register','POST',{id,password:p,name:n,w,ht,a})}
-  else r=await api('login','POST',{id,password:p});
+ const n=$('sn').value.trim(),w=+$('sw').value,ht=+$('sh').value,a=+$('sa').value;
+ if(!n||!(w>10&&w<300)||!(ht>50&&ht<260)||!(a>0&&a<120))return $('err').textContent='Please fill in valid name, weight, height and age.';
+ const id='u'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),p=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+ try{const r=await api('register','POST',{id,password:p,name:n,w,ht,a});
   TOK=r.token;U=id;users={};users[id]=r.user;sv();show()}catch(e){$('err').textContent=e.message}};
 $('out').onclick=()=>{U=null;TOK='';sv();stopCam();$('app').classList.add('hide');$('auth').classList.remove('hide')};
 // water goal: weight-based, adjusted by age; slightly more for taller people
